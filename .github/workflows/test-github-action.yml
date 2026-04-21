@@ -97,17 +97,53 @@ jobs:
     runs-on: ubuntu-latest
     #needs: [lint, test]
     steps:
+      - name: Validation des secrets SSH
+        env:
+          SSH_HOST_RAW: ${{ secrets.SSH_HOST }}
+          SSH_USER_RAW: ${{ secrets.SSH_USER }}
+          SSH_PORT_RAW: ${{ secrets.SSH_PORT }}
+        run: |
+          SSH_HOST="$(printf '%s' "$SSH_HOST_RAW" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          SSH_USER="$(printf '%s' "$SSH_USER_RAW" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          SSH_PORT="$(printf '%s' "${SSH_PORT_RAW:-22}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+          SSH_HOST="${SSH_HOST#\"}"; SSH_HOST="${SSH_HOST%\"}"
+          SSH_HOST="${SSH_HOST#\'}"; SSH_HOST="${SSH_HOST%\'}"
+          SSH_USER="${SSH_USER#\"}"; SSH_USER="${SSH_USER%\"}"
+          SSH_USER="${SSH_USER#\'}"; SSH_USER="${SSH_USER%\'}"
+          SSH_PORT="${SSH_PORT#\"}"; SSH_PORT="${SSH_PORT%\"}"
+          SSH_PORT="${SSH_PORT#\'}"; SSH_PORT="${SSH_PORT%\'}"
+
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USER" ]; then
+            echo "SSH_HOST or SSH_USER is empty. Check repository secrets." >&2
+            exit 1
+          fi
+
+          if [[ "$SSH_HOST" == *"@"* ]] || [[ "$SSH_HOST" == *"/"* ]] || [[ "$SSH_HOST" == *":"* ]]; then
+            echo "Invalid SSH_HOST format. Use only hostname/IP (no user, no protocol, no :port)." >&2
+            exit 1
+          fi
+
+          if ! [[ "$SSH_PORT" =~ ^[0-9]+$ ]]; then
+            echo "Invalid SSH_PORT. It must be numeric." >&2
+            exit 1
+          fi
+
+          echo "SSH_HOST=$SSH_HOST" >> "$GITHUB_ENV"
+          echo "SSH_USER=$SSH_USER" >> "$GITHUB_ENV"
+          echo "SSH_PORT=$SSH_PORT" >> "$GITHUB_ENV"
+
       - name: Configuration de la clé SSH
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           echo "${{ secrets.SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" > ~/.ssh/known_hosts
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
       - name: Connexion SSH et exécution de ls
         run: |
-          ssh -i ~/.ssh/id_rsa -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" << 'EOF'
+          ssh -p "$SSH_PORT" -i ~/.ssh/id_rsa -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts "$SSH_USER@$SSH_HOST" << 'EOF'
             export NVM_DIR="$HOME/.nvm"
             . "$NVM_DIR/nvm.sh"
             cd projects/next-cda25
