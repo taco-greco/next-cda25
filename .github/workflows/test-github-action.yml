@@ -115,7 +115,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/taco-greco/next
+          images: ghcr.io/taco-greco/next-cda25/next
           tags: |
             type=sha
             type=raw,value=latest

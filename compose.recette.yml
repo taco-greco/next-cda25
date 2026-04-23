@@ -1,6 +1,6 @@
 services:
   next-recette:
-    image: ghcr.io/taco-greco/next:${IMAGE_TAG:-latest}
+    image: ghcr.io/taco-greco/next-cda25/next:${IMAGE_TAG:-latest}
     container_name: next-cda25-recette
     restart: unless-stopped
     ports:
